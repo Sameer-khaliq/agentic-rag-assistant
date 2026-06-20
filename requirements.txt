@@ -26,7 +26,7 @@ attrs==26.1.0
     #   aiohttp
     #   jsonschema
     #   referencing
-audioop-lts==0.2.2
+
     # via gradio
 bcrypt==5.0.0
     # via chromadb
