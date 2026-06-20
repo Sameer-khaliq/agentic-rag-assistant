@@ -1,3 +1,16 @@
+---
+title: Agentic RAG Assistant
+emoji: 🤖
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: 4.44.1
+python_version: 3.11
+app_file: app.py
+pinned: false
+license: mit
+short_description: Autonomous ReAct RAG agent with dynamic tool routing.
+---
 # Agentic RAG Assistant 🤖
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
