@@ -3,13 +3,13 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-ReAct%20Agent-green.svg)](https://langchain.com)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
-[![Live Demo](https://img.shields.io/badge/demo-live-success.svg)]((https://huggingface.co/spaces/sameerkhaliq/agentic-rag-assistant))
+[![Live Demo](https://img.shields.io/badge/demo-live-success.svg)](YOUR_HF_SPACE_URL_HERE)
 
 A ReAct agent that dynamically chooses between **document retrieval**,
 **calculation**, and **live web search** based on the query — instead of
 always running a fixed retrieval pipeline.
 
-**[Live Demo →]((https://huggingface.co/spaces/sameerkhaliq/agentic-rag-assistant))**
+**[Live Demo →](YOUR_HF_SPACE_URL_HERE)**
 
 ## Architecture
 
