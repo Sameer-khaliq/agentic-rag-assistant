@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from datetime import datetime
-from pypdf import PdfReader
+from PyPDF2 import PdfReader
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import chromadb
 

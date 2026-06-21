@@ -3,7 +3,17 @@ import sys
 import gradio as gr
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import os
+from ingest import build_vector_store
 
+if not os.path.exists("chroma_db"):
+    print("No vector store found — building from PDFs at startup...")
+    build_vector_store()
+
+import gradio as gr
+from agent import ask_agent
+
+# ... baaki app.py waisa hi rahega
 from agent import ask_agent
 
 def respond(message, history):
