@@ -28,39 +28,8 @@ always running a fixed retrieval pipeline.
 
 ## 🏗️ System Architecture & Workflow
 
-<pre><code>
-       [ User Question ]
-               │
-               ▼
-     ┌───────────────────┐
-     │   ReAct Agent     │◄───────┐
-     │ (Reasoning Loop)  │        │ (Inspect Execution)
-     └─────────┬─────────┘        │
-               │                  │
- ┌─────────────┼─────────────┐    │
- │             │             │    │
- ▼             ▼             ▼    │
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│  Calculator  │ │  Compressed  │ │  Tavily Web  │
-│  Math Tool   │ │  Retriever   │ │  Live Search │
-└──────┬───────┘ └──────┬───────┘ └──────┬───────┘
-       │                │                │
-       │                ▼                │
-       │         ┌──────────────┐        │
-       │         │  ChromaDB    │        │
-       │         └──────┬───────┘        │
-       │                │                │
-       │                ▼                │
-       │         ┌──────────────┐        │
-       │         │ Contextual   │        │
-       │         │ Compression  │        │
-       │         └──────┬───────┘        │
-       │                │                │
-       └───────────────►┼◄───────────────┘
-                        │
-                        ▼
-               [ Synthesized Answer ]
-</code></pre>
+
+![Architecture diagram](architecture.png)
 
 ---
 
