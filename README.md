@@ -1,36 +1,23 @@
----
-title: Agentic RAG Assistant
-emoji: 🤖
-colorFrom: blue
-colorTo: green
-sdk: gradio
-sdk_version: 4.44.1
-python_version: 3.11
-app_file: app.py
-pinned: false
-license: mit
-short_description: Autonomous ReAct RAG agent with dynamic tool routing.
----
 # Agentic RAG Assistant 🤖
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
 [![LangChain](https://img.shields.io/badge/LangChain-ReAct%20Agent-green.svg)](https://langchain.com)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
-[![Live Demo](https://img.shields.io/badge/demo-live-success.svg)](https://huggingface.co/spaces/sameerkhaliq/agentic-rag-assistant)
+[![Live Demo](https://img.shields.io/badge/demo-live-success.svg)](https://sameerkhaliq-agentic-rag-assistant.hf.space/)
 
 A ReAct agent that dynamically chooses between **document retrieval**,
 **calculation**, and **live web search** based on the query — instead of
 always running a fixed retrieval pipeline.
 
-**[Live Interactive Demo →](https://huggingface.co/spaces/sameerkhaliq/agentic-rag-assistant)**
+**[Live Interactive Demo →](https://sameerkhaliq-agentic-rag-assistant.hf.space/)**
 
 ---
 
 ## 🏗️ System Architecture & Workflow
 
+## Architecture
 
 ![Architecture diagram](architecture.png)
-
 ---
 
 ## 📊 Benchmarks
@@ -39,8 +26,8 @@ always running a fixed retrieval pipeline.
 
 | Metric | Score |
 |---|---|
-| Faithfulness | 0.80 |
-| Answer Relevancy | 0.65 |
+| Faithfulness | 1.00 |
+| Answer Relevancy | 0.85 |
 | Context Recall | 1.00 |
 
 ### 2. Contextual compression (5 test queries):
