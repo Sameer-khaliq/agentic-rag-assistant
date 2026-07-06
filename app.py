@@ -1,49 +1,55 @@
 import os
 import sys
-import gradio as gr
 
+# Ensure inside nested operations that the root path can load 'src' clean
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import os
-from ingest import build_vector_store
-
-if not os.path.exists("chroma_db"):
-    print("No vector store found — building from PDFs at startup...")
-    build_vector_store()
 
 import gradio as gr
-from agent import ask_agent
+from src.logger import get_logger
+from src.ingest import build_vector_store
+from src.agent import ask_agent
 
-# ... baaki app.py waisa hi rahega
-from agent import ask_agent
+logger = get_logger(__name__)
+
+# System validation: Startup runtime extraction
+if not os.path.exists("chroma_db"):
+    logger.info("Chroma vector store directory missing. Initializing database extraction framework...")
+    build_vector_store()
+else:
+    logger.info("Chroma vector store directory located. Skipping raw data initialization.")
 
 def respond(message, history):
     """
-    Gradio routing function that pipes user input into our ReAct engine.
+    Gradio execution interface that pipes user queries directly to the low-latency 
+    Groq ReAct core engine.
     """
     try:
         answer = ask_agent(message)
     except Exception as e:
-        answer = f"Runtime Error: {e}\nPlease check if API keys and chroma_db are initialized correctly."
+        logger.error(f"UI routing catch error encountered: {str(e)}")
+        answer = (
+            "System Error: Unable to complete your request.\n"
+            "Please check backend connection mappings and parameters."
+        )
     return answer
-
 
 demo = gr.ChatInterface(
     fn=respond,
-    title="Agentic RAG Assistant",
+    title="Agentic RAG Production Assistant",
     description=(
-        "An advanced Autonomous ReAct Agent that dynamically switches between "
-        "Local Document Retrieval (with Contextual Compression), Mathematical Computation, "
-        "and Live Web Search (via Tavily) based on your question's intent."
+        "An Advanced Autonomous ReAct Agent optimized with Groq LPU inference. "
+        "Dynamically switches between Document Retrieval, Calculations, and Real-Time Search."
     ),
     examples=[
         "What is a centralized database?",
         "What are the types of computers based on size?",
         "What is 15 percent of 2400?",
         "Who is the current CEO of OpenAI?",
+        "Write a full-stack e-commerce system using Django and Next.js" # This will trigger your shut-up call guardrail!
     ],
-    theme="soft"
+    
 )
 
 if __name__ == "__main__":
-    
-    demo.launch()
+    # Explicit container port mapping binding configuration
+    demo.launch(server_name="0.0.0.0", server_port=7860)
