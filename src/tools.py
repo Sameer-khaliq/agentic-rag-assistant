@@ -1,35 +1,45 @@
 import math
 import chromadb
-from dotenv import load_dotenv
-from langchain.tools import Tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_core.tools import Tool
+from langchain_groq import ChatGroq
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.tools.tavily_search import TavilySearchResults
 
-load_dotenv()
+# Clean system structure imports
+from src.config import settings
+from src.logger import get_logger
 
+logger = get_logger(__name__)
 
 CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "day12_collection"
 
 
 def safe_calculator(expression: str) -> str:
-   
+    logger.info(f"Calculator tool triggered with execution payload: {expression}")
     allowed_names = {k: v for k, v in math.__dict__.items() if not k.startswith("__")}
     try:
         result = eval(expression, {"__builtins__": {}}, allowed_names)
         return str(result)
     except Exception as e:
+        logger.error(f"Calculator computation failure: {str(e)}")
         return f"Error evaluating expression: {e}"
 
 
 def retrieve_and_compress(query: str, k: int = 4) -> str:
+    logger.info(f"KnowledgeBaseRetriever pipeline triggered for query: {query}")
     
-    embedding_model = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    # Keeping Gemini for embeddings since the vector store expects it
+    embedding_model = GoogleGenerativeAIEmbeddings(
+    model="models/gemini-embedding-001",
+    google_api_key=settings.GEMINI_API_KEY
+)
     client = chromadb.PersistentClient(path=CHROMA_DIR)
     
     try:
         collection = client.get_collection(COLLECTION_NAME)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to access Chroma collection context: {str(e)}")
         return "Knowledge base index not initialized. Please verify chroma_db folder."
         
     query_embed = embedding_model.embed_query(query)
@@ -38,7 +48,9 @@ def retrieve_and_compress(query: str, k: int = 4) -> str:
     if not results or not results.get("documents") or not results["documents"][0]:
         return "No relevant information found in the knowledge base."
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+    # Sub-second latency optimized compression step via Groq
+    logger.info("Starting context compression map loop using Groq LPU...")
+    llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY, temperature=0)
     compressed_parts = []
     
     for doc_text in results["documents"][0]:
@@ -55,6 +67,7 @@ def retrieve_and_compress(query: str, k: int = 4) -> str:
         if extracted and extracted != "''":
             compressed_parts.append(extracted)
 
+    logger.info(f"Context compression complete. Extracted {len(compressed_parts)} valid reference pieces.")
     return "\n\n".join(compressed_parts) if compressed_parts else "No relevant info found after compression."
 
 
@@ -78,6 +91,7 @@ def build_tools() -> list[Tool]:
         max_results=3,
         name="WebSearch",
         description="Use for current events, today's date, real-time facts, weather, or anything outside the local knowledge base.",
+        tavily_api_key=settings.TAVILY_API_KEY
     )
 
     return [calculator_tool, retriever_tool, web_search_tool]
