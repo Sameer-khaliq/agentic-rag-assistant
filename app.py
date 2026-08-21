@@ -5,9 +5,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import gradio as gr
-from src.logger import get_logger
-from src.ingest import build_vector_store
-from src.agent import ask_agent
+from src_code.logger import get_logger
+from src_code.ingest import build_vector_store
+from src_code.agent import ask_agent
 
 logger = get_logger(__name__)
 
