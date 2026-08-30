@@ -33,7 +33,6 @@ Action Input: the input to the action
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
-Final Answer: the final answer to the original input question
 CRITICAL FORMATTING INSTRUCTIONS:
 - Output labels as plain text: Thought:, Action:, Action Input:, Final Answer: (Do NOT bold with **).
 - Output only ONE step at a time. Stop immediately after writing Action Input. Do NOT generate Observation yourself.
@@ -48,9 +47,6 @@ from langchain_classic.agents.agent import AgentOutputParser, AgentAction, Agent
 from langchain_classic.agents.output_parsers import ReActSingleInputOutputParser
 from src.gating import run_prefilter
 
-class RobustReActOutputParser(ReActSingleInputOutputParser):
-    """Normalizes modern markdown bolding (**Action:** -> Action:) so ReAct parsers don't fail."""
-    def parse(self, text: str):
 
 class RobustReActOutputParser(AgentOutputParser):
     """
@@ -64,7 +60,6 @@ class RobustReActOutputParser(AgentOutputParser):
     def parse(self, text: str) -> AgentAction | AgentFinish:
         cleaned = re.sub(r"\*\*([A-Za-z\s]+):\*\*", r"\1:", text)
         cleaned = re.sub(r"\*\*([A-Za-z\s]+)\*\*\s*:", r"\1:", cleaned)
-        return super().parse(cleaned)
 
         # 1. If Final Answer is present anywhere in output, accept it
         if "Final Answer:" in cleaned:
