@@ -1,6 +1,12 @@
 import sys
 from src.agent import ask_agent
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 def main():
     if len(sys.argv) > 1:

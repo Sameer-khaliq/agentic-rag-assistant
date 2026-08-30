@@ -6,9 +6,9 @@ from langchain_core.tools import Tool
 from langchain_groq import ChatGroq
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 try:
-    from langchain_tavily import TavilySearchResults
+    from langchain_tavily import TavilySearch as TavilyTool
 except ImportError:
-    from langchain_community.tools.tavily_search import TavilySearchResults
+    from langchain_community.tools.tavily_search import TavilySearchResults as TavilyTool
 
 # Clean system structure imports
 from src.config import settings
@@ -216,7 +216,7 @@ def build_tools() -> list[Tool]:
         ),
     )
 
-    web_search_tool = TavilySearchResults(
+    web_search_tool = TavilyTool(
         max_results=3,
         name="WebSearch",
         description="Use for current events, today's date, real-time facts, weather, or anything outside the local knowledge base.",
