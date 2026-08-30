@@ -34,6 +34,9 @@ Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
+CRITICAL FORMATTING INSTRUCTIONS:
+- Output labels as plain text: Thought:, Action:, Action Input:, Final Answer: (Do NOT bold with **).
+- Output only ONE step at a time. Stop immediately after writing Action Input. Do NOT generate Observation yourself.
 
 Begin!
 
@@ -41,15 +44,57 @@ Question: {input}
 Thought:{agent_scratchpad}"""
 
 import re
+from langchain_classic.agents.agent import AgentOutputParser, AgentAction, AgentFinish
 from langchain_classic.agents.output_parsers import ReActSingleInputOutputParser
 from src.gating import run_prefilter
 
 class RobustReActOutputParser(ReActSingleInputOutputParser):
     """Normalizes modern markdown bolding (**Action:** -> Action:) so ReAct parsers don't fail."""
     def parse(self, text: str):
+
+class RobustReActOutputParser(AgentOutputParser):
+    """
+    Robust ReAct parser for modern chat models like gpt-oss-120b.
+    - Strips markdown bolding (**Thought:** -> Thought:, **Action:** -> Action:).
+    - If the model directly provided 'Final Answer:', extracts it immediately without erroring.
+    - Handles tool actions and cleans stray observation echoes.
+    - Never raises unhandled parser exceptions that cause infinite retry loops.
+    """
+
+    def parse(self, text: str) -> AgentAction | AgentFinish:
         cleaned = re.sub(r"\*\*([A-Za-z\s]+):\*\*", r"\1:", text)
         cleaned = re.sub(r"\*\*([A-Za-z\s]+)\*\*\s*:", r"\1:", cleaned)
         return super().parse(cleaned)
+
+        # 1. If Final Answer is present anywhere in output, accept it
+        if "Final Answer:" in cleaned:
+            final_content = cleaned.rsplit("Final Answer:", 1)[-1].strip()
+            return AgentFinish({"output": final_content}, text)
+
+        # 2. If Action and Action Input are present, extract them cleanly
+        action_match = re.search(
+            r"Action:\s*(.*?)\n\s*Action Input:\s*(.*)", cleaned, re.DOTALL
+        )
+        if action_match:
+            action = action_match.group(1).strip().strip("`").strip('"').strip("'")
+            raw_input = action_match.group(2)
+            # Remove any hallucinated Observation continuation
+            raw_input = re.split(r"\nObservation\s*:?", raw_input)[0].strip()
+            tool_input = raw_input.strip('"').strip("'")
+            return AgentAction(action, tool_input, text)
+
+        # 3. If model provided a thought / explanation without action, treat as final answer
+        if "Thought:" in cleaned and "Action:" not in cleaned:
+            thought_content = cleaned.split("Thought:", 1)[-1].strip()
+            return AgentFinish({"output": thought_content}, text)
+
+        # 4. Fallback gracefully to returning the cleaned text as final answer
+        return AgentFinish({"output": cleaned.strip()}, text)
+
+    @property
+    def _type(self) -> str:
+        return "robust-react"
+
 
 _cached_executor = None
 
