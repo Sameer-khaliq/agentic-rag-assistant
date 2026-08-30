@@ -3,9 +3,9 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 
 # Core modular infrastructure references
-from src_code.tools import build_tools
-from src_code.config import settings
-from src_code.logger import get_logger
+from src.tools import build_tools
+from src.config import settings
+from src.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -17,7 +17,8 @@ REACT_PROMPT = """You are an Advanced Autonomous Assistant. You have access to t
 CRITICAL RULES FOR OUT-OF-SCOPE QUERIES:
 If the user asks for something completely out-of-scope, massively complex, or outside your core purpose (e.g., writing full-stack applications, complete system design, hacking, or heavy tasks unrelated to quick math, live search, or your local data), you MUST NOT use any Action. Skip directly to:
 Thought: This query is out of scope for my tools.
-Final Answer: Main sirf selected local documents (databases/computers), quick mathematical queries, aur live data fetch krne ka kaam kr rha hoon. Ye zyada complex query kisi aur se krwao aur bande k bachay ban jaao!
+Final Answer: I am specialized in answering queries from local knowledge base documents (computers and databases), performing mathematical calculations, and conducting real-time web searches. This request is outside the scope of my capabilities.
+
 MANDATORY RETRIEVAL RULE:
 If the query is about databases, database types, computers, or computer types — even if you already know the answer — you MUST use the KnowledgeBaseRetriever tool first. Never answer these topics directly from internal knowledge, since the local documents may contain specific details, definitions, or classifications that differ from general knowledge. This rule overrides the general conversational handling below.
 
@@ -39,12 +40,17 @@ Begin!
 Question: {input}
 Thought:{agent_scratchpad}"""
 
-def build_agent(return_intermediate_steps: bool = False):
-    logger.info("Constructing high-speed Groq ReAct execution engine framework...")
+from src.gating import run_prefilter
+
+_cached_executor = None
+
+
+def build_agent(return_intermediate_steps: bool = False) -> AgentExecutor:
+    logger.info(f"Constructing Groq ReAct execution engine with {settings.GROQ_AGENT_MODEL}...")
     
-    # Utilizing llama3-70b over Groq for bulletproof instruction following and low latency
+    # Utilizing Groq GPT-OSS 120B for deep reasoning and low latency
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile", 
+        model=settings.GROQ_AGENT_MODEL, 
         groq_api_key=settings.GROQ_API_KEY, 
         temperature=0.1
     )
@@ -54,7 +60,6 @@ def build_agent(return_intermediate_steps: bool = False):
 
     agent = create_react_agent(llm, tools, prompt)
     
-    # Max iterations capped at 4 to maximize latency efficiency and prevent loops
     executor = AgentExecutor(
         agent=agent,
         tools=tools,
@@ -66,10 +71,27 @@ def build_agent(return_intermediate_steps: bool = False):
     return executor
 
 
+def get_agent_executor(return_intermediate_steps: bool = False) -> AgentExecutor:
+    global _cached_executor
+    if _cached_executor is None or return_intermediate_steps:
+        executor = build_agent(return_intermediate_steps=return_intermediate_steps)
+        if not return_intermediate_steps:
+            _cached_executor = executor
+        return executor
+    return _cached_executor
+
+
 def ask_agent(query: str) -> str:
     logger.info(f"Agent router receiving query event: {query}")
+
+    # Layer 0/1 Fast Prefilter: Intercept greetings, abuse, credentials, and out-of-scope tasks with zero LLM calls
+    gate_result = run_prefilter(query)
+    if gate_result and gate_result.get("gated"):
+        logger.info(f"Query pre-filtered successfully: {gate_result.get('category')} ({gate_result.get('reason')})")
+        return gate_result["response"]
+
     try:
-        executor = build_agent()
+        executor = get_agent_executor()
         result = executor.invoke({"input": query})
         return result["output"]
     except Exception as e:
