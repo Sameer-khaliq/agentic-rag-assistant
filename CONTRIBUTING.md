@@ -3,7 +3,7 @@
 Thanks for your interest in contributing! This document outlines how to set up the project locally and the conventions used in this codebase.
 
 ## Project Overview
-An agentic RAG system that combines document retrieval (ChromaDB + Gemini embeddings), live web search (Tavily), and mathematical computation (Calculator) through a ReAct agent powered by Groq's Llama 3.3 70B.
+An agentic RAG system that combines document retrieval (ChromaDB + Gemini embeddings), live web search (Tavily), and mathematical computation (Calculator) through a ReAct agent powered by Groq's GPT-OSS 120B & 20B with prefilter gating.
 
 ## Prerequisites
 - Python 3.11+
