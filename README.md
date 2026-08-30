@@ -57,7 +57,7 @@ using the [ReAct](https://arxiv.org/abs/2210.03629) (Reason + Act) pattern.
 
 ## 🛠️ Tech stack
 
-LangChain (ReAct agent) · Gemini 2.5 Flash · ChromaDB · Tavily Search · Gradio · RAGAS (evaluation)
+LangChain (ReAct agent) · Groq GPT-OSS 120B & 20B · Google Gemini Embeddings · ChromaDB · Tavily Search · Gradio · Prefilter Gating
 
 ---
 
@@ -66,7 +66,7 @@ LangChain (ReAct agent) · Gemini 2.5 Flash · ChromaDB · Tavily Search · Grad
 ```bash
 git clone https://github.com/Sameer-khaliq/agentic-rag-assistant.git
 cd agentic-rag-assistant
-uv venv
-uv pip sync requirements.txt
+uv sync
 cp .env.example .env  # add your API keys
-uv run app.py
+uv run python app.py
+```
