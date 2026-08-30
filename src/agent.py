@@ -60,7 +60,9 @@ def build_agent(return_intermediate_steps: bool = False) -> AgentExecutor:
     llm = ChatGroq(
         model=settings.GROQ_AGENT_MODEL, 
         groq_api_key=settings.GROQ_API_KEY, 
-        temperature=0.1
+        temperature=0.1,
+        max_retries=3,
+        timeout=30.0,
     )
     
     tools = build_tools()

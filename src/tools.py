@@ -46,6 +46,8 @@ def _get_groq_llm() -> ChatGroq:
             model=settings.GROQ_COMPRESSION_MODEL,
             groq_api_key=settings.GROQ_API_KEY,
             temperature=0,
+            max_retries=3,
+            timeout=30.0,
         )
     return _groq_llm
 
