@@ -40,7 +40,16 @@ Begin!
 Question: {input}
 Thought:{agent_scratchpad}"""
 
+import re
+from langchain_classic.agents.output_parsers import ReActSingleInputOutputParser
 from src.gating import run_prefilter
+
+class RobustReActOutputParser(ReActSingleInputOutputParser):
+    """Normalizes modern markdown bolding (**Action:** -> Action:) so ReAct parsers don't fail."""
+    def parse(self, text: str):
+        cleaned = re.sub(r"\*\*([A-Za-z\s]+):\*\*", r"\1:", text)
+        cleaned = re.sub(r"\*\*([A-Za-z\s]+)\*\*\s*:", r"\1:", cleaned)
+        return super().parse(cleaned)
 
 _cached_executor = None
 
@@ -48,7 +57,6 @@ _cached_executor = None
 def build_agent(return_intermediate_steps: bool = False) -> AgentExecutor:
     logger.info(f"Constructing Groq ReAct execution engine with {settings.GROQ_AGENT_MODEL}...")
     
-    # Utilizing Groq GPT-OSS 120B for deep reasoning and low latency
     llm = ChatGroq(
         model=settings.GROQ_AGENT_MODEL, 
         groq_api_key=settings.GROQ_API_KEY, 
@@ -58,7 +66,7 @@ def build_agent(return_intermediate_steps: bool = False) -> AgentExecutor:
     tools = build_tools()
     prompt = PromptTemplate.from_template(REACT_PROMPT)
 
-    agent = create_react_agent(llm, tools, prompt)
+    agent = create_react_agent(llm, tools, prompt, output_parser=RobustReActOutputParser())
     
     executor = AgentExecutor(
         agent=agent,
