@@ -1,24 +1,24 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# System dependencies jo vector store ya native extensions ke liye chahiye
+# System dependencies for native extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv inside container
-RUN pip install uv
+# Install uv using official binary
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Docker layer caching use karne ke liye pehle lockfiles copy karein
-COPY pyproject.toml uv.lock ./
+# Copy dependency definition and lockfiles first for optimal layer caching
+COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-cache
 
-# Baqi saara project source code copy karein
+# Copy the rest of the application files
 COPY . .
 
-# Gradio default interface port expose karein
+# Expose Gradio default interface port
 EXPOSE 7860
 
-# Container starting command inside uv virtual environment context
+# Run Gradio application inside uv environment
 CMD ["uv", "run", "--frozen", "python", "app.py"]
