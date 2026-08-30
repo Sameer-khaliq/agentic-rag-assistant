@@ -3,84 +3,89 @@ from pathlib import Path
 from datetime import datetime
 from pypdf import PdfReader
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
 
-# Naye systems se imports
+# Clean system structure imports
 from src.config import settings
 from src.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Relative reference from root configuration
-PERSIST_DIR = "chroma_db"
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
 
 DOC_CATEGORIES = {
-    "data/Types_of_computers.pdf": "computers",
-    "data/Types_of_database.pdf": "databases",
+    "Types_of_computers.pdf": "computers",
+    "Types_of_database.pdf": "databases",
 }
 
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=150,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
 
-def extract_pdf(filepath: str, chunk_size: int = 500) -> list[str]:
+
+def extract_pdf(filepath: Path) -> list[str]:
+    """Extracts text from a PDF file and splits into overlapping semantic chunks."""
     logger.info(f"Extracting text from document asset: {filepath}")
     try:
-        reader = PdfReader(filepath)
+        reader = PdfReader(str(filepath))
         full_text = ""
         for page in reader.pages:
             text = page.extract_text()
             if text:
                 full_text += text + "\n"
 
-        words = full_text.split()
-        chunks, current_chunk, current_length = [], [], 0
-        for word in words:
-            current_chunk.append(word)
-            current_length += len(word) + 1
-            if current_length >= chunk_size:
-                chunks.append(" ".join(current_chunk))
-                current_chunk, current_length = [], 0
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
+        if not full_text.strip():
+            logger.warning(f"No extractable text found in PDF: {filepath}")
+            return []
+
+        chunks = text_splitter.split_text(full_text)
+        logger.info(f"Generated {len(chunks)} overlapping chunks from {filepath.name}")
         return chunks
     except Exception as e:
         logger.error(f"Failed to read/parse PDF path {filepath}: {str(e)}", exc_info=True)
         return []
 
 
-def build_vector_store():
+def build_vector_store() -> bool:
+    """Builds or rebuilds the Chroma vector store from local PDF documents."""
     logger.info("Initializing Vector Database ingestion execution...")
-    
-    # Secure API verification from configuration block before proceeding
-    if not os.environ.get("GEMINI_API_KEY"):
-        # Pydantic validates this, but extra runtime fallback guarantees zero embedding failures
-        logger.error("GEMINI_API_KEY environment binding is completely empty. Halting ingestion.")
-        return
 
-    # Ensure local data landing zone directory path exists safely
-    Path("data").mkdir(exist_ok=True)
+    if not settings.GEMINI_API_KEY:
+        logger.error("GEMINI_API_KEY is empty or missing in configuration. Halting ingestion.")
+        return False
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    Path(settings.CHROMA_DIR).mkdir(parents=True, exist_ok=True)
 
     try:
         embedding_model = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
-            google_api_key=settings.GEMINI_API_KEY
+            google_api_key=settings.GEMINI_API_KEY,
         )
-        client = chromadb.PersistentClient(path=PERSIST_DIR)
+        client = chromadb.PersistentClient(path=settings.CHROMA_DIR)
 
-        try:
-            client.delete_collection("day12_collection")
-            logger.info("Purged existing outdated day12_collection mapping context.")
-        except Exception:
-            pass
+        # Purge existing collections to ensure fresh indexing
+        for col_name in [settings.CHROMA_COLLECTION, "day12_collection"]:
+            try:
+                client.delete_collection(col_name)
+                logger.info(f"Purged existing collection '{col_name}'.")
+            except Exception:
+                pass
 
-        collection = client.create_collection("day12_collection")
+        collection = client.create_collection(settings.CHROMA_COLLECTION)
 
         all_documents, all_metadata = [], []
-        for filepath, category in DOC_CATEGORIES.items():
-            if not os.path.exists(filepath):
+        for filename, category in DOC_CATEGORIES.items():
+            filepath = DATA_DIR / filename
+            if not filepath.exists():
                 logger.warning(f"Target ingestion storage file not found, skipping target: {filepath}")
                 continue
 
             raw_chunks = extract_pdf(filepath)
-            filename = Path(filepath).name
             ingest_date = datetime.now().strftime("%Y-%m-%d")
 
             for chunk in raw_chunks:
@@ -94,10 +99,10 @@ def build_vector_store():
 
         if not all_documents:
             logger.warning("Vector pipeline aborted: Zero clean document string fragments extracted.")
-            return
+            return False
 
         ids = [f"id_{i}" for i in range(len(all_documents))]
-        
+
         logger.info(f"Generating vectors via Gemini API for {len(all_documents)} chunks...")
         embeddings = embedding_model.embed_documents(all_documents)
 
@@ -107,10 +112,12 @@ def build_vector_store():
             metadatas=all_metadata,
             ids=ids,
         )
-        logger.info(f"Successfully embedded and indexed {len(all_documents)} chunks into storage layer path: {PERSIST_DIR}")
-        
+        logger.info(f"Successfully embedded and indexed {len(all_documents)} chunks into '{settings.CHROMA_COLLECTION}' at {settings.CHROMA_DIR}")
+        return True
+
     except Exception as master_err:
         logger.critical(f"Critical breakdown in vector store execution pipeline: {str(master_err)}", exc_info=True)
+        return False
 
 
 if __name__ == "__main__":
