@@ -12,7 +12,10 @@ def main():
     if len(sys.argv) > 1:
         query = " ".join(sys.argv[1:])
         print(f"\nQuery: {query}\n" + "-" * 50)
-        answer = ask_agent(query)
+        try:
+            answer = ask_agent(query)
+        except Exception:
+            answer = "Agent Services unavailable at the moment try again later"
         print(f"\nResponse:\n{answer}\n")
     else:
         print("Agentic RAG Assistant CLI")
