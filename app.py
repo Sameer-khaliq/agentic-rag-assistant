@@ -30,15 +30,13 @@ async def respond(message: str, history: list):
     """
     Async Gradio handler — allows concurrent queries without blocking.
     Streams tokens to client as they arrive from Groq (perceived latency improvement).
+    Gracefully degrades if the agent encounters any failure.
     """
     try:
         answer = await ask_agent_async(message)
     except Exception as e:
         logger.error(f"UI routing catch error encountered: {str(e)}", exc_info=True)
-        answer = (
-            f"System Error: Unable to complete your request ({type(e).__name__}: {str(e)}).\n"
-            "Please verify API keys and network connectivity."
-        )
+        answer = "Agent Services unavailable at the moment try again later"
     return answer
 
 
