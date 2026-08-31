@@ -126,6 +126,9 @@ def get_agent_executor(return_intermediate_steps: bool = False) -> AgentExecutor
     return _cached_executor
 
 
+DEGRADATION_FALLBACK_MESSAGE = "Agent Services unavailable at the moment try again later"
+
+
 # ---------------------------------------------------------------------------
 # #1 — Async ask_agent (ainvoke) + sync wrapper for Gradio compatibility
 # ---------------------------------------------------------------------------
@@ -154,7 +157,7 @@ async def ask_agent_async(query: str) -> str:
         return result["output"]
     except Exception as e:
         logger.error(f"Agent execution failure: {str(e)}", exc_info=True)
-        raise
+        return DEGRADATION_FALLBACK_MESSAGE
 
 
 def ask_agent(query: str) -> str:
@@ -172,8 +175,9 @@ def ask_agent(query: str) -> str:
                 return future.result()
         else:
             return loop.run_until_complete(ask_agent_async(query))
-    except RuntimeError:
-        return asyncio.run(ask_agent_async(query))
+    except Exception as e:
+        logger.error(f"Sync wrapper failure: {str(e)}", exc_info=True)
+        return DEGRADATION_FALLBACK_MESSAGE
 
 
 if __name__ == "__main__":
