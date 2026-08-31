@@ -17,9 +17,11 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str
     GEMINI_API_KEY: str
     LOG_LEVEL: str = "INFO"
+    DEBUG: bool = False
     CHROMA_DIR: str = str(BASE_DIR / "chroma_db")
     CHROMA_COLLECTION: str = "agentic_rag_docs"
     GROQ_AGENT_MODEL: str = "openai/gpt-oss-120b"
     GROQ_COMPRESSION_MODEL: str = "openai/gpt-oss-20b"
+    AGENT_MAX_ITERATIONS: int = 4
 
 settings = Settings()
