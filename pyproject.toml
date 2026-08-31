@@ -22,3 +22,13 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: fast unit tests — no API keys or network required",
+    "integration: live integration tests — requires .env with real API keys",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::pytest.PytestUnknownMarkWarning",
+]
