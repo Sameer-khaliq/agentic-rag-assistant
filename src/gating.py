@@ -107,12 +107,11 @@ ABUSE_RESPONSES = {
         "Please rephrase your query politely and I'll gladly assist you."
     ),
     2: (
-        "This is your second warning. I do not tolerate abusive or offensive language. "
-        "Please keep the conversation professional."
+        "Main wehshi ho gaya na main chhadna ni tainoo baaz aa jaa pani harkataan tou!!!"
     ),
     3: (
-        "Repeated abuse detected. I will not engage with hostile or offensive queries. "
-        "Please ask a constructive, respectful question to continue."
+        "(Voice of bhola record) : Tere andar kerra keerra a jerra chun mun chun mun kar raya a"
+        
     ),
 }
 
