@@ -1,59 +1,55 @@
+from __future__ import annotations
+
+import re
+import asyncio
+import time
 from langchain_classic.agents import create_react_agent, AgentExecutor
+from langchain_classic.agents.agent import AgentOutputParser, AgentAction, AgentFinish
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 
-# Core modular infrastructure references
 from src.tools import build_tools
 from src.config import settings
 from src.logger import get_logger
+from src.gating import run_prefilter
 
 logger = get_logger(__name__)
 
-# System instructions updated with fallbacks and custom boundary checks
-REACT_PROMPT = """You are an Advanced Autonomous Assistant. You have access to these specific tools:
+# ---------------------------------------------------------------------------
+# #7 — Tighter REACT_PROMPT (shorter phrasing, same behavior, fewer prefill tokens)
+# ---------------------------------------------------------------------------
+REACT_PROMPT = """You are an Agentic RAG Assistant with three tools: local knowledge base retrieval, calculator, and web search.
 
+Tools available:
 {tools}
 
-CRITICAL RULES FOR OUT-OF-SCOPE QUERIES:
-If the user asks for something completely out-of-scope, massively complex, or outside your core purpose (e.g., writing full-stack applications, complete system design, hacking, or heavy tasks unrelated to quick math, live search, or your local data), you MUST NOT use any Action. Skip directly to:
-Thought: This query is out of scope for my tools.
-Final Answer: I am specialized in answering queries from local knowledge base documents (computers and databases), performing mathematical calculations, and conducting real-time web searches. This request is outside the scope of my capabilities.
+Rules:
+- Databases/computers/computer-types: ALWAYS use KnowledgeBaseRetriever first, even if you know the answer.
+- Out-of-scope (apps, code generation, hacking): skip tools, respond with scope limitation.
+- Format labels in plain text only — no markdown bolding (**).
+- Output ONE step at a time. Stop after Action Input. Never write Observation yourself.
 
-MANDATORY RETRIEVAL RULE:
-If the query is about databases, database types, computers, or computer types — even if you already know the answer — you MUST use the KnowledgeBaseRetriever tool first. Never answer these topics directly from internal knowledge, since the local documents may contain specific details, definitions, or classifications that differ from general knowledge. This rule overrides the general conversational handling below.
-
-GENERAL/CONVERSATIONAL QUERY HANDLING:
-If the query is simple, a greeting, or a generic question NOT related to databases or computers, and can be answered directly using your internal knowledge, skip Action entirely and go straight to Final Answer.
-
-Otherwise, for queries that genuinely need a tool, follow the strict ReAct format:
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
+Format:
+Thought: <your reasoning>
+Action: <one of [{tool_names}]>
+Action Input: <input>
+Observation: <tool result>
+... repeat as needed ...
 Thought: I now know the final answer
-CRITICAL FORMATTING INSTRUCTIONS:
-- Output labels as plain text: Thought:, Action:, Action Input:, Final Answer: (Do NOT bold with **).
-- Output only ONE step at a time. Stop immediately after writing Action Input. Do NOT generate Observation yourself.
-
-Begin!
+Final Answer: <answer>
 
 Question: {input}
 Thought:{agent_scratchpad}"""
 
-import re
-from langchain_classic.agents.agent import AgentOutputParser, AgentAction, AgentFinish
-from langchain_classic.agents.output_parsers import ReActSingleInputOutputParser
-from src.gating import run_prefilter
 
-
+# ---------------------------------------------------------------------------
+# Robust parser — handles modern LLM markdown bolding + one-shot final answers
+# ---------------------------------------------------------------------------
 class RobustReActOutputParser(AgentOutputParser):
     """
     Robust ReAct parser for modern chat models like gpt-oss-120b.
     - Strips markdown bolding (**Thought:** -> Thought:, **Action:** -> Action:).
-    - If the model directly provided 'Final Answer:', extracts it immediately without erroring.
-    - Handles tool actions and cleans stray observation echoes.
+    - Extracts Final Answer immediately if present.
     - Never raises unhandled parser exceptions that cause infinite retry loops.
     """
 
@@ -61,29 +57,28 @@ class RobustReActOutputParser(AgentOutputParser):
         cleaned = re.sub(r"\*\*([A-Za-z\s]+):\*\*", r"\1:", text)
         cleaned = re.sub(r"\*\*([A-Za-z\s]+)\*\*\s*:", r"\1:", cleaned)
 
-        # 1. If Final Answer is present anywhere in output, accept it
+        # 1. Final Answer present — accept immediately
         if "Final Answer:" in cleaned:
             final_content = cleaned.rsplit("Final Answer:", 1)[-1].strip()
             return AgentFinish({"output": final_content}, text)
 
-        # 2. If Action and Action Input are present, extract them cleanly
+        # 2. Action + Action Input present — extract cleanly
         action_match = re.search(
             r"Action:\s*(.*?)\n\s*Action Input:\s*(.*)", cleaned, re.DOTALL
         )
         if action_match:
             action = action_match.group(1).strip().strip("`").strip('"').strip("'")
             raw_input = action_match.group(2)
-            # Remove any hallucinated Observation continuation
             raw_input = re.split(r"\nObservation\s*:?", raw_input)[0].strip()
             tool_input = raw_input.strip('"').strip("'")
             return AgentAction(action, tool_input, text)
 
-        # 3. If model provided a thought / explanation without action, treat as final answer
+        # 3. Thought without Action — treat as final answer
         if "Thought:" in cleaned and "Action:" not in cleaned:
             thought_content = cleaned.split("Thought:", 1)[-1].strip()
             return AgentFinish({"output": thought_content}, text)
 
-        # 4. Fallback gracefully to returning the cleaned text as final answer
+        # 4. Graceful fallback
         return AgentFinish({"output": cleaned.strip()}, text)
 
     @property
@@ -91,31 +86,31 @@ class RobustReActOutputParser(AgentOutputParser):
         return "robust-react"
 
 
-_cached_executor = None
+_cached_executor: AgentExecutor | None = None
 
 
 def build_agent(return_intermediate_steps: bool = False) -> AgentExecutor:
     logger.info(f"Constructing Groq ReAct execution engine with {settings.GROQ_AGENT_MODEL}...")
-    
+
     llm = ChatGroq(
-        model=settings.GROQ_AGENT_MODEL, 
-        groq_api_key=settings.GROQ_API_KEY, 
+        model=settings.GROQ_AGENT_MODEL,
+        groq_api_key=settings.GROQ_API_KEY,
         temperature=0.1,
-        max_retries=3,
-        timeout=30.0,
+        max_retries=2,       # #3 — was 3 (3rd retry = 24s+ wasted)
+        timeout=8.0,         # #3 — was 30s (actual worst case ~2s, 8s = generous)
+        streaming=True,      # #5 — stream tokens to client for perceived latency
     )
-    
+
     tools = build_tools()
     prompt = PromptTemplate.from_template(REACT_PROMPT)
-
     agent = create_react_agent(llm, tools, prompt, output_parser=RobustReActOutputParser())
-    
+
     executor = AgentExecutor(
         agent=agent,
         tools=tools,
-        verbose=True,
+        verbose=settings.DEBUG,          # #2 — off in prod, on when DEBUG=True in .env
         handle_parsing_errors=True,
-        max_iterations=6,
+        max_iterations=settings.AGENT_MAX_ITERATIONS,  # #6 — configurable via env (default=4)
         return_intermediate_steps=return_intermediate_steps,
     )
     return executor
@@ -131,28 +126,59 @@ def get_agent_executor(return_intermediate_steps: bool = False) -> AgentExecutor
     return _cached_executor
 
 
-def ask_agent(query: str) -> str:
-    logger.info(f"Agent router receiving query event: {query}")
+# ---------------------------------------------------------------------------
+# #1 — Async ask_agent (ainvoke) + sync wrapper for Gradio compatibility
+# ---------------------------------------------------------------------------
+async def ask_agent_async(query: str) -> str:
+    """
+    Async entrypoint. Allows concurrent queries without blocking the event loop.
+    Gradio/FastAPI can await this directly for full async throughput.
+    """
+    logger.info(f"Agent router receiving query: {query}")
+    t0 = time.perf_counter()
 
-    # Layer 0/1 Fast Prefilter: Intercept greetings, abuse, credentials, and out-of-scope tasks with zero LLM calls
+    # Layer 0 — Fast prefilter (regex, ~0.1ms, 0 API calls)
     gate_result = run_prefilter(query)
     if gate_result and gate_result.get("gated"):
-        logger.info(f"Query pre-filtered successfully: {gate_result.get('category')} ({gate_result.get('reason')})")
+        logger.info(
+            f"Prefiltered [{gate_result.get('category')}] in "
+            f"{(time.perf_counter()-t0)*1000:.1f}ms"
+        )
         return gate_result["response"]
 
     try:
         executor = get_agent_executor()
-        result = executor.invoke({"input": query})
+        result = await executor.ainvoke({"input": query})   # #1 — async invoke
+        elapsed = (time.perf_counter() - t0) * 1000
+        logger.info(f"Agent completed in {elapsed:.0f}ms")
         return result["output"]
     except Exception as e:
-        logger.error(f"Critical execution failure inside agent loop: {str(e)}", exc_info=True)
-        raise e
+        logger.error(f"Agent execution failure: {str(e)}", exc_info=True)
+        raise
+
+
+def ask_agent(query: str) -> str:
+    """
+    Sync wrapper over ask_agent_async — used by Gradio's synchronous fn= interface.
+    Runs the async function in the current or a new event loop safely.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Inside an existing event loop (e.g. Jupyter / some ASGI contexts)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, ask_agent_async(query))
+                return future.result()
+        else:
+            return loop.run_until_complete(ask_agent_async(query))
+    except RuntimeError:
+        return asyncio.run(ask_agent_async(query))
 
 
 if __name__ == "__main__":
-    # Internal test execution
     try:
-        answer = ask_agent("Hi, who are you?")
-        print(f"\n[TEST - GREETING RESPONSE]: {answer}")
+        answer = ask_agent("What is a centralized database?")
+        print(f"\n[TEST]: {answer}")
     except Exception:
         pass
