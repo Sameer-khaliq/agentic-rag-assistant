@@ -107,7 +107,7 @@ ABUSE_RESPONSES = {
         "Please rephrase your query politely and I'll gladly assist you."
     ),
     2: (
-        "Main wehshi ho gaya na main chhadna ni tainoo baaz aa jaa pani harkataan tou!!!"
+        "Main wehshi ho gaya na main chhadna ni tainoo baaz aa jaa apni harkataan tou!!!"
     ),
     3: (
         "(Voice of bhola record) : Tere andar kerra keerra a jerra chun mun chun mun kar raya a"
