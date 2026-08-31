@@ -92,21 +92,61 @@ _ABUSE_TERMS = [
     r"\b(tu|ye\s*bot|ye\s*ai)\s+(chutiya|pagal|fazool|bekar|ghatiya|jahil)\s*(hai|ho)?\b",
     r"\b(mar\s*ja|dafa\s*ho\s*ja|nikal\s*yahan\s*se)\b",
 ]
+
 _ABUSE_RE = re.compile("|".join(_ABUSE_TERMS), re.IGNORECASE)
 
-ABUSE_RESPONSE = (
-    "I want to help, but I need the conversation to stay respectful. "
-    "Please rephrase your query politely and I'll gladly assist you."
-)
+# ---------------------------------------------------------------------------
+# FR-22: Tiered Progressive Abuse Handler (1st -> 2nd -> 3rd+ Escalation)
+# ---------------------------------------------------------------------------
+
+_ABUSE_COUNTER: int = 0
+
+ABUSE_RESPONSES = {
+    1: (
+        "I want to help, but I need the conversation to stay respectful. "
+        "Please rephrase your query politely and I'll gladly assist you."
+    ),
+    2: (
+        "This is your second warning. I do not tolerate abusive or offensive language. "
+        "Please keep the conversation professional."
+    ),
+    3: (
+        "Repeated abuse detected. I will not engage with hostile or offensive queries. "
+        "Please ask a constructive, respectful question to continue."
+    ),
+}
+
+# Backward compatibility alias
+ABUSE_RESPONSE = ABUSE_RESPONSES[1]
+
+
+def get_abuse_response() -> str:
+    """Increments strike counter and returns the appropriate escalation message."""
+    global _ABUSE_COUNTER
+    _ABUSE_COUNTER += 1
+    if _ABUSE_COUNTER == 1:
+        return ABUSE_RESPONSES[1]
+    elif _ABUSE_COUNTER == 2:
+        return ABUSE_RESPONSES[2]
+    else:
+        return ABUSE_RESPONSES[3]
+
+
+def reset_abuse_count() -> None:
+    """Resets the abuse strike counter (useful for new sessions / tests)."""
+    global _ABUSE_COUNTER
+    _ABUSE_COUNTER = 0
 
 
 def check_abusive_language(query: str) -> dict[str, Any] | None:
     if _ABUSE_RE.search(query):
+        response_text = get_abuse_response()
         return {
             "gated": True,
             "category": "FR-22",
-            "response": ABUSE_RESPONSE,
-            "reason": "abusive_language",
+            "response": response_text,
+            "reason": f"abusive_language_strike_{min(_ABUSE_COUNTER, 3)}",
+            "strike": _ABUSE_COUNTER,
         }
     return None
 
