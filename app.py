@@ -9,7 +9,7 @@ import gradio as gr
 from src.config import settings
 from src.logger import get_logger
 from src.ingest import build_vector_store
-from src.agent import ask_agent
+from src.agent import ask_agent_async
 
 logger = get_logger(__name__)
 
@@ -26,13 +26,13 @@ def _ensure_vector_store():
 _ensure_vector_store()
 
 
-def respond(message: str, history: list):
+async def respond(message: str, history: list):
     """
-    Gradio execution interface that pipes user queries directly to the low-latency 
-    Groq ReAct core engine.
+    Async Gradio handler — allows concurrent queries without blocking.
+    Streams tokens to client as they arrive from Groq (perceived latency improvement).
     """
     try:
-        answer = ask_agent(message)
+        answer = await ask_agent_async(message)
     except Exception as e:
         logger.error(f"UI routing catch error encountered: {str(e)}", exc_info=True)
         answer = (
