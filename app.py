@@ -110,44 +110,49 @@ CUSTOM_THEME = gr.themes.Soft(
 
 
 # ---------------------------------------------------------------------------
-# Async Generator Handler with Phased Thinking Words
+# Responsive Async Handler: Thinking Words Dynamic with Agent Task
 # ---------------------------------------------------------------------------
-async def respond(message: str, history: list):
-    """
-    Async streaming handler that displays progressive thinking status updates
-    before presenting the final synthesized response.
-    """
-    # Phase 1: 1s Delay
-    yield " *Processing your input...*"
-    await asyncio.sleep(1.0)
-
-    # Phase 2: 2s Delay
-    yield " *Synthesizing answer...*"
-    await asyncio.sleep(2.0)
-
-    # Phase 3: 3s Delay
-    yield " *Presenting you the reasonable answer...*"
-    await asyncio.sleep(3.0)
-
-    # Phase 4: Final Output Execution
+def _safe_task_result(task: asyncio.Task) -> str:
     try:
-        answer = await ask_agent_async(message)
+        return task.result()
     except Exception as e:
         logger.error(f"UI routing catch error encountered: {str(e)}", exc_info=True)
-        answer = "Agent Services unavailable at the moment try again later"
+        return "Agent Services unavailable at the moment try again later"
 
-    # Thinking words disappear and are completely replaced by final answer
-    yield answer
+
+async def respond(message: str, history: list):
+    """
+    Runs agent concurrently in background. Progressive thinking words are shown
+    ONLY while the agent is still working. As soon as the output is ready (e.g.
+    instant prefiltered 'hi' or fast math), thinking words vanish immediately.
+    """
+    # Start agent execution concurrently in the background
+    agent_task = asyncio.create_task(ask_agent_async(message))
+
+    # Phase 1: Processing input (wait max 1s or until agent finishes)
+    yield "⏳ *Processing your input...*"
+    done, _ = await asyncio.wait([agent_task], timeout=1.0)
+    if done:
+        yield _safe_task_result(agent_task)
+        return
+
+    # Phase 2: Synthesizing answer (wait max 2s or until agent finishes)
+    yield "⚙️ *Synthesizing answer...*"
+    done, _ = await asyncio.wait([agent_task], timeout=2.0)
+    if done:
+        yield _safe_task_result(agent_task)
+        return
+
+    # Phase 3: Presenting answer (wait until finished)
+    yield "✨ *Presenting you the reasonable answer...*"
+    await agent_task
+    yield _safe_task_result(agent_task)
 
 
 # ---------------------------------------------------------------------------
 # Gradio Chat Interface Definition (Gradio 6.x Compatible)
 # ---------------------------------------------------------------------------
-with gr.Blocks(
-    theme=CUSTOM_THEME,
-    css=CUSTOM_CSS,
-    title="🤖 Agentic RAG Assistant",
-) as demo:
+with gr.Blocks(title="🤖 Agentic RAG Assistant") as demo:
     gr.ChatInterface(
         fn=respond,
         title="🤖 Agentic RAG Assistant",
@@ -163,6 +168,18 @@ with gr.Blocks(
             "Write a full-stack e-commerce system using Django and Next.js",
         ],
     )
+
+# Automatically attach custom theme and CSS on launch in Gradio 6.x
+_orig_launch = demo.launch
+
+
+def _launch_with_theme(*args, **kwargs):
+    kwargs.setdefault("theme", CUSTOM_THEME)
+    kwargs.setdefault("css", CUSTOM_CSS)
+    return _orig_launch(*args, **kwargs)
+
+
+demo.launch = _launch_with_theme
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)
