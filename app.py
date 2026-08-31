@@ -141,25 +141,28 @@ async def respond(message: str, history: list):
 
 
 # ---------------------------------------------------------------------------
-# Gradio Chat Interface Definition
+# Gradio Chat Interface Definition (Gradio 6.x Compatible)
 # ---------------------------------------------------------------------------
-demo = gr.ChatInterface(
-    fn=respond,
-    title="🤖 Agentic RAG Assistant",
-    description=(
-        "Autonomous ReAct Assistant powered by Groq (GPT-OSS 120B/20B) with "
-        "Document Retrieval, AST Math, and Real-Time Web Search."
-    ),
-    examples=[
-        "What is a centralized database?",
-        "What are the types of computers based on size?",
-        "What is 15 percent of 2400?",
-        "Who is the current CEO of OpenAI?",
-        "Write a full-stack e-commerce system using Django and Next.js",
-    ],
+with gr.Blocks(
     theme=CUSTOM_THEME,
     css=CUSTOM_CSS,
-)
+    title="🤖 Agentic RAG Assistant",
+) as demo:
+    gr.ChatInterface(
+        fn=respond,
+        title="🤖 Agentic RAG Assistant",
+        description=(
+            "Autonomous ReAct Assistant powered by Groq (GPT-OSS 120B/20B) with "
+            "Document Retrieval, AST Math, and Real-Time Web Search."
+        ),
+        examples=[
+            "What is a centralized database?",
+            "What are the types of computers based on size?",
+            "What is 15 percent of 2400?",
+            "Who is the current CEO of OpenAI?",
+            "Write a full-stack e-commerce system using Django and Next.js",
+        ],
+    )
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)
